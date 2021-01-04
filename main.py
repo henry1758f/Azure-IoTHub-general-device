@@ -3,6 +3,8 @@ import asyncio
 import platform
 import json
 import os
+import sys
+
 #for IP Address obtain
 import socket
 import requests
@@ -14,6 +16,22 @@ from azure.iot.device import constant, Message, MethodResponse
 model_id = ""
 #================#
 OS_SYSTEM = "N/A"
+period = 2
+
+def end_listener():
+    if os.getenv("KEYPAD_INTERRUPT") == "ENABLE":
+        while True:
+            selection = input("Press Q to quit\n")
+            if selection == "Q" or selection == "q":
+                print("Quitting...")
+                break
+    else :
+        print('[DEBUG] Telemetry will send forever.')
+        import time
+        while True:
+            time.sleep(1)
+            sys.stdout.flush()
+
 
 async def property_update(device_client):
     print("[DEBUG] Update System Message")
@@ -98,22 +116,25 @@ async def property_update(device_client):
     #
 
 async def telemetery_update(device_client):
-    cpuLoading = psutil.cpu_percent()
-    cpuClock =  psutil.cpu_freq().current
-    mem_free = psutil.virtual_memory().free
-    mem_usg = psutil.virtual_memory().percent
-    logicalDISKfree = psutil.disk_usage('C:/').free
-    logicalDISKpercent = psutil.disk_usage('C:/').percent
-    json_msg_array = []
-    json_msg_array.append({"cpuLoading": cpuLoading})
-    json_msg_array.append({"cpuClock": cpuClock})
-    json_msg_array.append({"mem_free": mem_free})
-    json_msg_array.append({"mem_usg": mem_usg})
-    json_msg_array.append({"logicalDISKfree": logicalDISKfree})
-    json_msg_array.append({"logicalDISKpercent": logicalDISKpercent})
-    for msg in json_msg_array:
-        print('[DEBUG] Sending Telemetry :{m}'.format(m=msg))
-        await telemetry_sender(device_client, msg)
+    print('[DEBUG] Start sending telemetry every {sec} Second(s).'.format(sec=period))
+    while True:
+        cpuLoading = psutil.cpu_percent()
+        cpuClock =  psutil.cpu_freq().current
+        mem_free = psutil.virtual_memory().free
+        mem_usg = psutil.virtual_memory().percent
+        logicalDISKfree = psutil.disk_usage('C:/').free
+        logicalDISKpercent = psutil.disk_usage('C:/').percent
+        
+        json_msg = {}
+        json_msg["cpuLoading"]=cpuLoading
+        json_msg["cpuClock"]=cpuClock
+        json_msg["memFree"]=mem_free
+        json_msg["memUsg"]=mem_usg
+        json_msg["logicalDISKfree"]=logicalDISKfree
+        json_msg["logicalDISKpercent"]=logicalDISKpercent
+        print('[DEBUG] Sending Telemetry :{m}'.format(m=json_msg))
+        await telemetry_sender(device_client, json_msg)
+        await asyncio.sleep(period)
     
     
 async def telemetry_sender(device_client, telemetry_msg):
@@ -122,6 +143,59 @@ async def telemetry_sender(device_client, telemetry_msg):
     msg.content_type = "application/json"
     print("Sent message")
     await device_client.send_message(msg)
+
+async def reboot_handler(values):
+    if values and type(values) == int:
+        print("Rebooting after delay of {delay} secs".format(delay=values))
+        asyncio.sleep(values)
+
+    print("Done rebooting")
+
+def create_reboot_response(values):
+    response = {"result": True, "data": "reboot succeeded"}
+    return response
+
+async def setperiod_handler(values):
+    if values and type(values) == int:
+        print("Reset telemetry sending period from {delay_old} to {delay} secs".format(delay_old=period,delay=values))
+        period = values
+    print("Finished period setting!")
+
+def create_setperiod_response(values):
+    response = {"result": True, "data": "Reset telemetry sending period succeeded"}
+    return response
+
+async def execute_command_listener(device_client, method_name, user_command_handler, create_user_response_handler):
+    while True:
+        if method_name:
+            command_name = method_name
+        else:
+            command_name = None
+
+        command_request = await device_client.receive_method_request(command_name)
+        print("Command request received with payload ({method_name})".format(method_name=method_name))
+        print(command_request.payload)
+
+        values = {}
+        if not command_request.payload:
+            print("Payload was empty.")
+        else:
+            values = command_request.payload
+
+        await user_command_handler(values)
+
+        response_status = 200
+        response_payload = create_user_response_handler(values)
+
+        command_response = MethodResponse.create_from_method_request(
+            command_request, response_status, response_payload
+        )
+
+        try:
+            await device_client.send_method_response(command_response)
+        except Exception:
+            print("responding to the {command} command failed".format(command=method_name))
+
 
 async def provision_device(provisioning_host, id_scope, registration_id, symmetric_key, model_id):
     provisioning_device_client = ProvisioningDeviceClient.create_from_symmetric_key(
@@ -182,10 +256,44 @@ async def main():
 
     # Connect the client.
     await device_client.connect()
-
+    # Command Listener
+    listeners = asyncio.gather(
+        execute_command_listener(
+            device_client,
+            method_name="reboot",
+            user_command_handler=reboot_handler,
+            create_user_response_handler=create_reboot_response,
+        ),
+        execute_command_listener(
+            device_client,
+            method_name="setperiod",
+            user_command_handler=setperiod_handler,
+            create_user_response_handler=create_setperiod_response,
+        ),
+    )
     await property_update(device_client)
-    
-    await telemetery_update(device_client)
+    telemetery_update_task = asyncio.create_task(telemetery_update(device_client))
+
+    loop = asyncio.get_running_loop()
+    end = loop.run_in_executor(None, end_listener)
+    await end
+
+    if not listeners.done():
+        listeners.set_result("DONE")
+
+    listeners.cancel()
+
+    telemetery_update_task.cancel()
+
+    # finally, disconnect
+    await device_client.disconnect()
+
+
+
+
+    #await property_update(device_client)
+
+    #await telemetery_update(device_client)
 
 
 
