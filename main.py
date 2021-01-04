@@ -44,7 +44,7 @@ async def property_update(device_client):
     s.close()
     ipPublic = requests.get('http://ifconfig.me/ip', timeout=1).text.strip()
     #
-
+    global root_path
     if OS_SYSTEM == "Windows":
         root_path = 'C:/'
         hostname_str = platform.node()
@@ -69,8 +69,8 @@ async def property_update(device_client):
         osVersion = ' '.join(os.popen('hostnamectl |grep "Operating System"').read().split(':')[1].split() )
         osBuildNumber = ' '.join(os.popen('hostnamectl |grep "Kernel"').read().split(':')[1].split() )
         # Linux Only
-        highTemp = psutil.sensors_Temperatures()['coretemp'][0][2]
-        criticalTemp = psutil.sensors_Temperatures()['coretemp'][0][3]
+        highTemp = psutil.sensors_temperatures()['coretemp'][0][2]
+        criticalTemp = psutil.sensors_temperatures()['coretemp'][0][3]
 
 
     logicalDISKtotal = psutil.disk_usage(root_path).total
@@ -122,8 +122,10 @@ async def telemetery_update(device_client):
         cpuClock =  psutil.cpu_freq().current
         mem_free = psutil.virtual_memory().free
         mem_usg = psutil.virtual_memory().percent
-        logicalDISKfree = psutil.disk_usage('C:/').free
-        logicalDISKpercent = psutil.disk_usage('C:/').percent
+        logicalDISKfree = psutil.disk_usage(root_path).free
+        logicalDISKpercent = psutil.disk_usage(root_path).percent
+        if OS_SYSTEM == "Linux":
+            currentTemp = psutil.sensors_temperatures()['coretemp'][0][1]
         
         json_msg = {}
         json_msg["cpuLoading"]=cpuLoading
@@ -132,6 +134,8 @@ async def telemetery_update(device_client):
         json_msg["memUsg"]=mem_usg
         json_msg["logicalDISKfree"]=logicalDISKfree
         json_msg["logicalDISKpercent"]=logicalDISKpercent
+        if OS_SYSTEM == "Linux":
+            json_msg["currentTemp"]=currentTemp
         print('[DEBUG] Sending Telemetry :{m}'.format(m=json_msg))
         await telemetry_sender(device_client, json_msg)
         await asyncio.sleep(period)
