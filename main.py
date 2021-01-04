@@ -15,7 +15,6 @@ from azure.iot.device import constant, Message, MethodResponse
 ## for DPS Testing
 model_id = ""
 #================#
-OS_SYSTEM = "N/A"
 period = 2
 
 def end_listener():
@@ -33,9 +32,9 @@ def end_listener():
             sys.stdout.flush()
 
 
-async def property_update(device_client):
+async def property_update(device_client,os_type):
     print("[DEBUG] Update System Message")
-    OS_SYSTEM = platform.system()
+    
     memTotal = psutil.virtual_memory().total
     # get IP Address
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -45,7 +44,7 @@ async def property_update(device_client):
     ipPublic = requests.get('http://ifconfig.me/ip', timeout=1).text.strip()
     #
     global root_path
-    if OS_SYSTEM == "Windows":
+    if os_type == "Windows":
         root_path = 'C:/'
         hostname_str = platform.node()
         cpuInfo = ' '.join(os.popen('wmic cpu get name').read().splitlines()[2].split() )
@@ -57,7 +56,7 @@ async def property_update(device_client):
         osVersion = ''.join(os.popen('wmic os get Version').read().splitlines()[2].split() )
         osBuildNumber = ''.join(os.popen('wmic os get BuildNumber').read().splitlines()[2].split() )
 
-    elif OS_SYSTEM == "Linux":
+    elif os_type == "Linux":
         root_path = '/'
         hostname_str = platform.node()
         cpuInfo = ' '.join(os.popen('lscpu |grep "Model name"').read().split(':')[1].split() )
@@ -83,7 +82,7 @@ async def property_update(device_client):
     print("OS Build/Kernel : {osK}".format(osK=osBuildNumber))
     print("Hostname : {host}".format(host=hostname_str))
     print("CPU Info : {cpu}".format(cpu=cpuInfo))
-    if OS_SYSTEM == "Linux":
+    if os_type == "Linux":
         print("> CPU High Temp : {cpu_ht} Ce".format(cpu_ht=highTemp))
         print("> CPU Critical : {cpu_ct} Ce".format(cpu_ct=criticalTemp))
     print("BIOS Manufature : {biosM}".format(biosM=biosManufacturer))
@@ -110,12 +109,12 @@ async def property_update(device_client):
     await device_client.patch_twin_reported_properties({"logicalDISKtotal": logicalDISKtotal})
     await device_client.patch_twin_reported_properties({"ipLocal": ipLocal})
     await device_client.patch_twin_reported_properties({"ipPublic": ipPublic})
-    if OS_SYSTEM == "Linux":
+    if os_type == "Linux":
         await device_client.patch_twin_reported_properties({"highTemp": highTemp})
         await device_client.patch_twin_reported_properties({"criticalTemp": criticalTemp})
     #
 
-async def telemetery_update(device_client):
+async def telemetery_update(device_client,os_type):
     print('[DEBUG] Start sending telemetry every {sec} Second(s).'.format(sec=period))
     while True:
         cpuLoading = psutil.cpu_percent()
@@ -124,7 +123,7 @@ async def telemetery_update(device_client):
         mem_usg = psutil.virtual_memory().percent
         logicalDISKfree = psutil.disk_usage(root_path).free
         logicalDISKpercent = psutil.disk_usage(root_path).percent
-        if OS_SYSTEM == "Linux":
+        if os_type == "Linux":
             currentTemp = psutil.sensors_temperatures()['coretemp'][0][1]
         
         json_msg = {}
@@ -134,7 +133,7 @@ async def telemetery_update(device_client):
         json_msg["memUsg"]=mem_usg
         json_msg["logicalDISKfree"]=logicalDISKfree
         json_msg["logicalDISKpercent"]=logicalDISKpercent
-        if OS_SYSTEM == "Linux":
+        if os_type == "Linux":
             json_msg["currentTemp"]=currentTemp
         print('[DEBUG] Sending Telemetry :{m}'.format(m=json_msg))
         await telemetry_sender(device_client, json_msg)
@@ -275,8 +274,9 @@ async def main():
             create_user_response_handler=create_setperiod_response,
         ),
     )
-    await property_update(device_client)
-    telemetery_update_task = asyncio.create_task(telemetery_update(device_client))
+    OS_SYSTEM = platform.system()
+    await property_update(device_client,OS_SYSTEM)
+    telemetery_update_task = asyncio.create_task(telemetery_update(device_client,OS_SYSTEM))
 
     loop = asyncio.get_running_loop()
     end = loop.run_in_executor(None, end_listener)
