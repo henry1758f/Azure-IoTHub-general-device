@@ -77,7 +77,7 @@ async def property_update(device_client,os_type):
     # Print Property result
     print('============================')
     print('Property List Upodate >>>>>>')
-    print("OS type : {os}".format(os=OS_SYSTEM))
+    print("OS type : {os}".format(os=os_type))
     print("OS Version : {osV}".format(osV=osVersion))
     print("OS Build/Kernel : {osK}".format(osK=osBuildNumber))
     print("Hostname : {host}".format(host=hostname_str))
