@@ -15,6 +15,7 @@ from azure.iot.device import constant, Message, MethodResponse
 ## for DPS Testing
 model_id = ""
 #================#
+global period
 period = 2
 
 def end_listener():
@@ -159,6 +160,7 @@ def create_reboot_response(values):
     return response
 
 async def setperiod_handler(values):
+    global period
     if values and type(values) == int:
         print("Reset telemetry sending period from {delay_old} to {delay} secs".format(delay_old=period,delay=values))
         period = values
