@@ -1,3 +1,8 @@
+################################################
+# SYNNEX International Technology Corp.
+# General Device Monitor with Azure IoT Hub
+# henryhuang@synnex-grp.com
+################################################
 import psutil
 import asyncio
 import platform
