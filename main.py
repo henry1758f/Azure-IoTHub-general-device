@@ -136,9 +136,9 @@ async def telemetery_update(device_client,os_type):
         json_msg["cpuLoading"]=cpuLoading
         json_msg["cpuClock"]=cpuClock
         json_msg["memFree"]=mem_free
-        json_msg["memUsg"]=mem_usg
+        json_msg["memUsage"]=mem_usg
         json_msg["logicalDISKfree"]=logicalDISKfree
-        json_msg["logicalDISKpercent"]=logicalDISKpercent
+        json_msg["logicalDISKusage"]=logicalDISKpercent
         if os_type == "Linux":
             json_msg["currentTemp"]=currentTemp
         print('[DEBUG] Sending Telemetry :{m}'.format(m=json_msg))
