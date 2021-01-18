@@ -38,10 +38,8 @@ def end_listener():
             sys.stdout.flush()
 
 
-async def property_update(device_client,os_type):
+async def property_update(device_client,os_type,machine):
     print("[DEBUG] Update System Message")
-    
-    memTotal = psutil.virtual_memory().total
     # get IP Address
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.connect(("8.8.8.8", 80))
@@ -49,11 +47,14 @@ async def property_update(device_client,os_type):
     s.close()
     ipPublic = requests.get('http://ifconfig.me/ip', timeout=1).text.strip()
     #
+
+
     global root_path
     if os_type == "Windows":
         root_path = 'C:/'
         hostname_str = platform.node()
         cpuInfo = ' '.join(os.popen('wmic cpu get name').read().splitlines()[2].split() )
+        cpuCores = psutil.cpu_count()
         biosManufacturer = ' '.join(os.popen('wmic bios get Manufacturer').read().splitlines()[2].split() )
         biosVersion = ''.join(os.popen('wmic bios get Version').read().splitlines()[2].split() )
         baseboardManufacturer = ''.join(os.popen('wmic baseboard get Manufacturer').read().splitlines()[2].split() )
@@ -65,21 +66,35 @@ async def property_update(device_client,os_type):
     elif os_type == "Linux":
         root_path = '/'
         hostname_str = platform.node()
-        cpuInfo = ' '.join(os.popen('lscpu |grep "Model name"').read().split(':')[1].split() )
-        biosManufacturer = ' '.join(os.popen('cat /sys/class/dmi/id/bios_vendor').read().split() )
-        biosVersion = ' '.join(os.popen('cat /sys/class/dmi/id/bios_version').read().split() )
-        baseboardManufacturer = ' '.join(os.popen('cat /sys/class/dmi/id/board_vendor').read().split() )
-        baseboardSerialNumber = ' '.join(os.popen('sudo cat /sys/class/dmi/id/board_serial').read().split() )
-        baseboardProduct = ' '.join(os.popen('cat /sys/class/dmi/id/board_name').read().split() )
         osVersion = ' '.join(os.popen('hostnamectl |grep "Operating System"').read().split(':')[1].split() )
         osBuildNumber = ' '.join(os.popen('hostnamectl |grep "Kernel"').read().split(':')[1].split() )
-        # Linux Only
-        highTemp = psutil.sensors_temperatures()['coretemp'][0][2]
-        criticalTemp = psutil.sensors_temperatures()['coretemp'][0][3]
+        if "x86" in machine:
+            cpuInfo = ' '.join(os.popen('lscpu |grep "Model name"').read().split(':')[1].split() )
+            biosManufacturer = ' '.join(os.popen('cat /sys/class/dmi/id/bios_vendor').read().split() )
+            biosVersion = ' '.join(os.popen('cat /sys/class/dmi/id/bios_version').read().split() )
+            baseboardManufacturer = ' '.join(os.popen('cat /sys/class/dmi/id/board_vendor').read().split() )
+            baseboardSerialNumber = ' '.join(os.popen('sudo cat /sys/class/dmi/id/board_serial').read().split() )
+            baseboardProduct = ' '.join(os.popen('cat /sys/class/dmi/id/board_name').read().split() )
+            # Linux Only
+            highTemp = psutil.sensors_temperatures()['coretemp'][0][2]
+            criticalTemp = psutil.sensors_temperatures()['coretemp'][0][3]
+        else :
+            try:
+                cpuInfo = ' '.join(os.popen('lscpu |grep "Model name"').read().split(':')[1].split() )
+            except:
+                cpuInfo = machine
+            try:
+                highTemp = psutil.sensors_temperatures()['soc-thermal'][0][2]
+                criticalTemp = psutil.sensors_temperatures()['soc-thermal'][0][3]
+            except:
+                highTemp = 0
+                criticalTemp = 0    
 
-
+    cpuCores = psutil.cpu_count()
+    cpuMaxfreq = psutil.cpu_freq().max
     logicalDISKtotal = psutil.disk_usage(root_path).total
-
+    memTotal = psutil.virtual_memory().total
+    
     # Print Property result
     print('============================')
     print('Property List Upodate >>>>>>')
@@ -88,6 +103,8 @@ async def property_update(device_client,os_type):
     print("OS Build/Kernel : {osK}".format(osK=osBuildNumber))
     print("Hostname : {host}".format(host=hostname_str))
     print("CPU Info : {cpu}".format(cpu=cpuInfo))
+    print("CPU Core Count : {cpus}".format(cpus=cpuCores))
+    print("CPU Max Frequency : {cpuMF}".format(cpuMF=cpuMaxfreq))
     if os_type == "Linux":
         print("> CPU High Temp : {cpu_ht} Ce".format(cpu_ht=highTemp))
         print("> CPU Critical : {cpu_ct} Ce".format(cpu_ct=criticalTemp))
@@ -104,6 +121,8 @@ async def property_update(device_client,os_type):
     # Sending System Property 
     await device_client.patch_twin_reported_properties({"hostname": hostname_str})
     await device_client.patch_twin_reported_properties({"cpuInfo": cpuInfo})
+    await device_client.patch_twin_reported_properties({"cpuCores": cpuCores})
+    await device_client.patch_twin_reported_properties({"cpuMaxfreq": cpuMaxfreq})
     await device_client.patch_twin_reported_properties({"biosManufacturer": biosManufacturer})
     await device_client.patch_twin_reported_properties({"biosVersion": biosVersion})
     await device_client.patch_twin_reported_properties({"baseboardManufacturer": baseboardManufacturer})
@@ -120,7 +139,7 @@ async def property_update(device_client,os_type):
         await device_client.patch_twin_reported_properties({"criticalTemp": criticalTemp})
     #
 
-async def telemetery_update(device_client,os_type):
+async def telemetery_update(device_client,os_type,machine):
     print('[DEBUG] Start sending telemetry every {sec} Second(s).'.format(sec=period))
     while True:
         cpuLoading = psutil.cpu_percent()
@@ -130,7 +149,11 @@ async def telemetery_update(device_client,os_type):
         logicalDISKfree = psutil.disk_usage(root_path).free
         logicalDISKpercent = psutil.disk_usage(root_path).percent
         if os_type == "Linux":
-            currentTemp = psutil.sensors_temperatures()['coretemp'][0][1]
+            if 'x86' in machine:
+                currentTemp = psutil.sensors_temperatures()['coretemp'][0][1]
+            else:
+                currentTemp = psutil.sensors_temperatures()['soc-thermal'][0][1]
+                currentTempGPU = psutil.sensors_temperatures()['gpu-thermal'][0][1]
         
         json_msg = {}
         json_msg["cpuLoading"]=cpuLoading
@@ -141,6 +164,8 @@ async def telemetery_update(device_client,os_type):
         json_msg["logicalDISKusage"]=logicalDISKpercent
         if os_type == "Linux":
             json_msg["currentTemp"]=currentTemp
+        if not 'x86' in machine:
+            json_msg["currentTempGPU"]=currentTempGPU
         print('[DEBUG] Sending Telemetry :{m}'.format(m=json_msg))
         await telemetry_sender(device_client, json_msg)
         await asyncio.sleep(period)
@@ -282,8 +307,9 @@ async def main():
         ),
     )
     OS_SYSTEM = platform.system()
-    await property_update(device_client,OS_SYSTEM)
-    telemetery_update_task = asyncio.create_task(telemetery_update(device_client,OS_SYSTEM))
+    MACHINE = platform.machine()
+    await property_update(device_client,OS_SYSTEM,MACHINE)
+    telemetery_update_task = asyncio.create_task(telemetery_update(device_client,OS_SYSTEM,MACHINE))
 
     loop = asyncio.get_running_loop()
     end = loop.run_in_executor(None, end_listener)
