@@ -79,6 +79,11 @@ async def property_update(device_client,os_type,machine):
             highTemp = psutil.sensors_temperatures()['coretemp'][0][2]
             criticalTemp = psutil.sensors_temperatures()['coretemp'][0][3]
         else :
+            biosManufacturer = 'N/A'
+            biosVersion = 'N/A'
+            baseboardManufacturer = 'N/A'
+            baseboardSerialNumber = 'N/A'
+            baseboardProduct = 'N/A'
             try:
                 cpuInfo = ' '.join(os.popen('lscpu |grep "Model name"').read().split(':')[1].split() )
             except:
@@ -94,7 +99,7 @@ async def property_update(device_client,os_type,machine):
     cpuMaxfreq = psutil.cpu_freq().max
     logicalDISKtotal = psutil.disk_usage(root_path).total
     memTotal = psutil.virtual_memory().total
-    
+
     # Print Property result
     print('============================')
     print('Property List Upodate >>>>>>')
