@@ -22,6 +22,7 @@ model_id = ""
 # For Multiple components
 import pnp_helper
 windows_device_info_component_name = "WindowsDeviceInfo1"
+linux_device_info_component_name = "LinuxDeviceInfo1"
 #================#
 global period
 period = 2
@@ -127,24 +128,46 @@ async def property_update(device_client,os_type,machine):
     print("Public IP Address : {ip}".format(ip=ipPublic))
 
     # For Multiple components
-    properties_device_info = pnp_helper.create_reported_properties(
-        windows_device_info_component_name,
-        hostname=hostname_str,
-        cpuInfo=cpuInfo,
-        cpuCores=cpuCores,
-        cpuMaxfreq=cpuMaxfreq,
-        biosManufacturer=biosManufacturer,
-        biosVersion=biosVersion,
-        baseboardManufacturer=baseboardManufacturer,
-        baseboardSerialNumber=baseboardSerialNumber,
-        baseboardProduct=baseboardProduct,
-        osVersion=osVersion,
-        osBuildNumber=osBuildNumber,
-        memTotal=memTotal,
-        logicalDISKtotal=logicalDISKtotal,
-        ipLocal=ipLocal,
-        ipPublic=ipPublic,
-    )
+    if os_type == "Windows":
+        properties_device_info = pnp_helper.create_reported_properties(
+            windows_device_info_component_name,
+            hostname=hostname_str,
+            cpuInfo=cpuInfo,
+            cpuCores=cpuCores,
+            cpuMaxfreq=cpuMaxfreq,
+            biosManufacturer=biosManufacturer,
+            biosVersion=biosVersion,
+            baseboardManufacturer=baseboardManufacturer,
+            baseboardSerialNumber=baseboardSerialNumber,
+            baseboardProduct=baseboardProduct,
+            osVersion=osVersion,
+            osBuildNumber=osBuildNumber,
+            memTotal=memTotal,
+            logicalDISKtotal=logicalDISKtotal,
+            ipLocal=ipLocal,
+            ipPublic=ipPublic,
+        )
+    elif os_type == "Linux":
+        properties_device_info = pnp_helper.create_reported_properties(
+            linux_device_info_component_name,
+            hostname=hostname_str,
+            cpuInfo=cpuInfo,
+            cpuCores=cpuCores,
+            cpuMaxfreq=cpuMaxfreq,
+            biosManufacturer=biosManufacturer,
+            biosVersion=biosVersion,
+            baseboardManufacturer=baseboardManufacturer,
+            baseboardSerialNumber=baseboardSerialNumber,
+            baseboardProduct=baseboardProduct,
+            osVersion=osVersion,
+            osBuildNumber=osBuildNumber,
+            memTotal=memTotal,
+            logicalDISKtotal=logicalDISKtotal,
+            ipLocal=ipLocal,
+            ipPublic=ipPublic,
+            highTemp=highTemp,
+            criticalTemp=criticalTemp,
+        )
 
     property_updates = asyncio.gather(
         device_client.patch_twin_reported_properties(properties_device_info),
@@ -200,7 +223,10 @@ async def telemetery_update(device_client,os_type,machine):
          #   json_msg["currentTempGPU"]=currentTempGPU
         print('[DEBUG] Sending Telemetry :{m}'.format(m=json_msg))
         # For Multiple components
-        await send_telemetry_from_temp_controller(device_client, json_msg, windows_device_info_component_name)
+        if os_type == "Windows":
+            await send_telemetry_from_temp_controller(device_client, json_msg, windows_device_info_component_name)
+        elif os_type == "Linux":
+            await send_telemetry_from_temp_controller(device_client, json_msg, linux_device_info_component_name)
         await asyncio.sleep(period)
     
     
@@ -382,26 +408,47 @@ async def main():
 
     # Connect the client.
     await device_client.connect()
-    # Command Listener
-    # For Multiple components
-    listeners = asyncio.gather(
-        execute_command_listener(
-            device_client,
-            windows_device_info_component_name,
-            method_name="reboot",
-            user_command_handler=reboot_handler,
-            create_user_response_handler=create_reboot_response,
-        ),
-        execute_command_listener(
-            device_client,
-            windows_device_info_component_name,
-            method_name="setperiod",
-            user_command_handler=setperiod_handler,
-            create_user_response_handler=create_setperiod_response,
-        ),
-    )
+
     OS_SYSTEM = platform.system()
     MACHINE = platform.machine()
+    
+    # Command Listener
+    # For Multiple components
+    if OS_SYSTEM == "Windows":
+        listeners = asyncio.gather(
+            execute_command_listener(
+                device_client,
+                windows_device_info_component_name,
+                method_name="reboot",
+                user_command_handler=reboot_handler,
+                create_user_response_handler=create_reboot_response,
+            ),
+            execute_command_listener(
+                device_client,
+                windows_device_info_component_name,
+                method_name="setperiod",
+                user_command_handler=setperiod_handler,
+                create_user_response_handler=create_setperiod_response,
+            ),
+        )
+    elif OS_SYSTEM == "Linux":
+        listeners = asyncio.gather(
+            execute_command_listener(
+                device_client,
+                linux_device_info_component_name,
+                method_name="reboot",
+                user_command_handler=reboot_handler,
+                create_user_response_handler=create_reboot_response,
+            ),
+            execute_command_listener(
+                device_client,
+                linux_device_info_component_name,
+                method_name="setperiod",
+                user_command_handler=setperiod_handler,
+                create_user_response_handler=create_setperiod_response,
+            ),
+        )
+
     await property_update(device_client,OS_SYSTEM,MACHINE)
     telemetery_update_task = asyncio.create_task(telemetery_update(device_client,OS_SYSTEM,MACHINE))
 
