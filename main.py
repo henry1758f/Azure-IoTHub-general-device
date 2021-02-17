@@ -19,6 +19,9 @@ from azure.iot.device import constant, Message, MethodResponse
 
 ## for DPS Testing
 model_id = ""
+# For Multiple components
+import pnp_helper
+windows_device_info_component_name = "WindowsDeviceInfo1"
 #================#
 global period
 period = 2
@@ -123,25 +126,49 @@ async def property_update(device_client,os_type,machine):
     print("Local IP Address : {ip}".format(ip=ipLocal))
     print("Public IP Address : {ip}".format(ip=ipPublic))
 
+    # For Multiple components
+    properties_device_info = pnp_helper.create_reported_properties(
+        windows_device_info_component_name,
+        hostname=hostname_str,
+        cpuInfo=cpuInfo,
+        cpuCores=cpuCores,
+        cpuMaxfreq=cpuMaxfreq,
+        biosManufacturer=biosManufacturer,
+        biosVersion=biosVersion,
+        baseboardManufacturer=baseboardManufacturer,
+        baseboardSerialNumber=baseboardSerialNumber,
+        baseboardProduct=baseboardProduct,
+        osVersion=osVersion,
+        osBuildNumber=osBuildNumber,
+        memTotal=memTotal,
+        logicalDISKtotal=logicalDISKtotal,
+        ipLocal=ipLocal,
+        ipPublic=ipPublic,
+    )
+
+    property_updates = asyncio.gather(
+        device_client.patch_twin_reported_properties(properties_device_info),
+    )
+
     # Sending System Property 
-    await device_client.patch_twin_reported_properties({"hostname": hostname_str})
-    await device_client.patch_twin_reported_properties({"cpuInfo": cpuInfo})
-    await device_client.patch_twin_reported_properties({"cpuCores": cpuCores})
-    await device_client.patch_twin_reported_properties({"cpuMaxfreq": cpuMaxfreq})
-    await device_client.patch_twin_reported_properties({"biosManufacturer": biosManufacturer})
-    await device_client.patch_twin_reported_properties({"biosVersion": biosVersion})
-    await device_client.patch_twin_reported_properties({"baseboardManufacturer": baseboardManufacturer})
-    await device_client.patch_twin_reported_properties({"baseboardSerialNumber": baseboardSerialNumber})
-    await device_client.patch_twin_reported_properties({"baseboardProduct": baseboardProduct})
-    await device_client.patch_twin_reported_properties({"osVersion": osVersion})
-    await device_client.patch_twin_reported_properties({"osBuildNumber": osBuildNumber})
-    await device_client.patch_twin_reported_properties({"memTotal": memTotal})
-    await device_client.patch_twin_reported_properties({"logicalDISKtotal": logicalDISKtotal})
-    await device_client.patch_twin_reported_properties({"ipLocal": ipLocal})
-    await device_client.patch_twin_reported_properties({"ipPublic": ipPublic})
-    if os_type == "Linux":
-        await device_client.patch_twin_reported_properties({"highTemp": highTemp})
-        await device_client.patch_twin_reported_properties({"criticalTemp": criticalTemp})
+    # await device_client.patch_twin_reported_properties({"hostname": hostname_str})
+    # await device_client.patch_twin_reported_properties({"cpuInfo": cpuInfo})
+    # await device_client.patch_twin_reported_properties({"cpuCores": cpuCores})
+    # await device_client.patch_twin_reported_properties({"cpuMaxfreq": cpuMaxfreq})
+    # await device_client.patch_twin_reported_properties({"biosManufacturer": biosManufacturer})
+    # await device_client.patch_twin_reported_properties({"biosVersion": biosVersion})
+    # await device_client.patch_twin_reported_properties({"baseboardManufacturer": baseboardManufacturer})
+    # await device_client.patch_twin_reported_properties({"baseboardSerialNumber": baseboardSerialNumber})
+    # await device_client.patch_twin_reported_properties({"baseboardProduct": baseboardProduct})
+    # await device_client.patch_twin_reported_properties({"osVersion": osVersion})
+    # await device_client.patch_twin_reported_properties({"osBuildNumber": osBuildNumber})
+    # await device_client.patch_twin_reported_properties({"memTotal": memTotal})
+    # await device_client.patch_twin_reported_properties({"logicalDISKtotal": logicalDISKtotal})
+    # await device_client.patch_twin_reported_properties({"ipLocal": ipLocal})
+    # await device_client.patch_twin_reported_properties({"ipPublic": ipPublic})
+    # if os_type == "Linux":
+    #     await device_client.patch_twin_reported_properties({"highTemp": highTemp})
+    #     await device_client.patch_twin_reported_properties({"criticalTemp": criticalTemp})
     #
 
 async def telemetery_update(device_client,os_type,machine):
@@ -169,10 +196,11 @@ async def telemetery_update(device_client,os_type,machine):
         json_msg["logicalDISKusage"]=logicalDISKpercent
         if os_type == "Linux":
             json_msg["currentTemp"]=currentTemp
-        if not 'x86' in machine:
-            json_msg["currentTempGPU"]=currentTempGPU
+        #if not 'x86' in machine:
+         #   json_msg["currentTempGPU"]=currentTempGPU
         print('[DEBUG] Sending Telemetry :{m}'.format(m=json_msg))
-        await telemetry_sender(device_client, json_msg)
+        # For Multiple components
+        await send_telemetry_from_temp_controller(device_client, json_msg, windows_device_info_component_name)
         await asyncio.sleep(period)
     
     
@@ -247,6 +275,64 @@ async def provision_device(provisioning_host, id_scope, registration_id, symmetr
     provisioning_device_client.provisioning_payload = {"modelId": model_id}
     return await provisioning_device_client.register()
 
+# For Multiple components
+async def send_telemetry_from_temp_controller(device_client, telemetry_msg, component_name=None):
+    msg = pnp_helper.create_telemetry(telemetry_msg, component_name)
+    await device_client.send_message(msg)
+    print("Sent message")
+
+async def execute_command_listener(
+    device_client,
+    component_name=None,
+    method_name=None,
+    user_command_handler=None,
+    create_user_response_handler=None,
+):
+    """
+    Coroutine for executing listeners. These will listen for command requests.
+    They will take in a user provided handler and call the user provided handler
+    according to the command request received.
+    :param device_client: The device client
+    :param component_name: The name of the device like "sensor"
+    :param method_name: (optional) The specific method name to listen for. Eg could be "blink", "turnon" etc.
+    If not provided the listener will listen for all methods.
+    :param user_command_handler: (optional) The user provided handler that needs to be executed after receiving "command requests".
+    If not provided nothing will be executed on receiving command.
+    :param create_user_response_handler: (optional) The user provided handler that will create a response.
+    If not provided a generic response will be created.
+    :return:
+    """
+    while True:
+        if component_name and method_name:
+            command_name = component_name + "*" + method_name
+        elif method_name:
+            command_name = method_name
+        else:
+            command_name = None
+
+        command_request = await device_client.receive_method_request(command_name)
+        print("Command request received with payload")
+        values = command_request.payload
+        print(values)
+
+        if user_command_handler:
+            await user_command_handler(values)
+        else:
+            print("No handler provided to execute")
+
+        (response_status, response_payload) = pnp_helper.create_response_payload_with_status(
+            command_request, method_name, create_user_response=create_user_response_handler
+        )
+
+        command_response = MethodResponse.create_from_method_request(
+            command_request, response_status, response_payload
+        )
+
+        try:
+            await device_client.send_method_response(command_response)
+        except Exception:
+            print("responding to the {command} command failed".format(command=method_name))
+
 async def main():
     print("SYNNEX Technology International Corp. Azure-IoT General Device")
     switch = os.getenv("IOTHUB_DEVICE_SECURITY_TYPE")
@@ -297,15 +383,18 @@ async def main():
     # Connect the client.
     await device_client.connect()
     # Command Listener
+    # For Multiple components
     listeners = asyncio.gather(
         execute_command_listener(
             device_client,
+            windows_device_info_component_name,
             method_name="reboot",
             user_command_handler=reboot_handler,
             create_user_response_handler=create_reboot_response,
         ),
         execute_command_listener(
             device_client,
+            windows_device_info_component_name,
             method_name="setperiod",
             user_command_handler=setperiod_handler,
             create_user_response_handler=create_setperiod_response,
@@ -322,8 +411,14 @@ async def main():
 
     if not listeners.done():
         listeners.set_result("DONE")
+    
+    # For Multiple components
+    if not property_updates.done():
+        property_updates.set_result("DONE")
 
     listeners.cancel()
+    # For Multiple components
+    property_updates.cancel()
 
     telemetery_update_task.cancel()
 
