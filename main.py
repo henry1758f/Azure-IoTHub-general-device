@@ -173,27 +173,6 @@ async def property_update(device_client,os_type,machine):
         device_client.patch_twin_reported_properties(properties_device_info),
     )
 
-    # Sending System Property 
-    # await device_client.patch_twin_reported_properties({"hostname": hostname_str})
-    # await device_client.patch_twin_reported_properties({"cpuInfo": cpuInfo})
-    # await device_client.patch_twin_reported_properties({"cpuCores": cpuCores})
-    # await device_client.patch_twin_reported_properties({"cpuMaxfreq": cpuMaxfreq})
-    # await device_client.patch_twin_reported_properties({"biosManufacturer": biosManufacturer})
-    # await device_client.patch_twin_reported_properties({"biosVersion": biosVersion})
-    # await device_client.patch_twin_reported_properties({"baseboardManufacturer": baseboardManufacturer})
-    # await device_client.patch_twin_reported_properties({"baseboardSerialNumber": baseboardSerialNumber})
-    # await device_client.patch_twin_reported_properties({"baseboardProduct": baseboardProduct})
-    # await device_client.patch_twin_reported_properties({"osVersion": osVersion})
-    # await device_client.patch_twin_reported_properties({"osBuildNumber": osBuildNumber})
-    # await device_client.patch_twin_reported_properties({"memTotal": memTotal})
-    # await device_client.patch_twin_reported_properties({"logicalDISKtotal": logicalDISKtotal})
-    # await device_client.patch_twin_reported_properties({"ipLocal": ipLocal})
-    # await device_client.patch_twin_reported_properties({"ipPublic": ipPublic})
-    # if os_type == "Linux":
-    #     await device_client.patch_twin_reported_properties({"highTemp": highTemp})
-    #     await device_client.patch_twin_reported_properties({"criticalTemp": criticalTemp})
-    #
-
 async def telemetery_update(device_client,os_type,machine):
     print('[DEBUG] Start sending telemetry every {sec} Second(s).'.format(sec=period))
     while True:
@@ -218,30 +197,24 @@ async def telemetery_update(device_client,os_type,machine):
         json_msg["logicalDISKfree"]=logicalDISKfree
         json_msg["logicalDISKusage"]=logicalDISKpercent
         if os_type == "Linux":
-            json_msg["currentTemp"]=currentTemp
-        #if not 'x86' in machine:
-         #   json_msg["currentTempGPU"]=currentTempGPU
+            if 'x86' in machine:
+                json_msg["currentTemp"]=currentTemp
+            else:
+                json_msg["currentTemp"]=currentTemp
+                json_msg["currentTempGPU"]=currentTempGPU
+
         print('[DEBUG] Sending Telemetry :{m}'.format(m=json_msg))
         # For Multiple components
         if os_type == "Windows":
-            await send_telemetry_from_temp_controller(device_client, json_msg, windows_device_info_component_name)
+            await send_telemetry_with_component_name(device_client, json_msg, windows_device_info_component_name)
         elif os_type == "Linux":
-            await send_telemetry_from_temp_controller(device_client, json_msg, linux_device_info_component_name)
+            await send_telemetry_with_component_name(device_client, json_msg, linux_device_info_component_name)
         await asyncio.sleep(period)
-    
-    
-async def telemetry_sender(device_client, telemetry_msg):
-    msg = Message(json.dumps(telemetry_msg))
-    msg.content_encoding = "utf-8"
-    msg.content_type = "application/json"
-    print("Sent message")
-    await device_client.send_message(msg)
 
 async def reboot_handler(values):
     if values and type(values) == int:
         print("Rebooting after delay of {delay} secs".format(delay=values))
         asyncio.sleep(values)
-
     print("Done rebooting")
 
 def create_reboot_response(values):
@@ -302,7 +275,7 @@ async def provision_device(provisioning_host, id_scope, registration_id, symmetr
     return await provisioning_device_client.register()
 
 # For Multiple components
-async def send_telemetry_from_temp_controller(device_client, telemetry_msg, component_name=None):
+async def send_telemetry_with_component_name(device_client, telemetry_msg, component_name=None):
     msg = pnp_helper.create_telemetry(telemetry_msg, component_name)
     await device_client.send_message(msg)
     print("Sent message")
@@ -449,9 +422,6 @@ async def main():
             ),
         )
 
-    await property_update(device_client,OS_SYSTEM,MACHINE)
-    telemetery_update_task = asyncio.create_task(telemetery_update(device_client,OS_SYSTEM,MACHINE))
-
     loop = asyncio.get_running_loop()
     end = loop.run_in_executor(None, end_listener)
     await end
@@ -471,14 +441,6 @@ async def main():
 
     # finally, disconnect
     await device_client.disconnect()
-
-
-
-
-    #await property_update(device_client)
-
-    #await telemetery_update(device_client)
-
 
 
 #================================#
