@@ -422,6 +422,9 @@ async def main():
             ),
         )
 
+    await property_update(device_client,OS_SYSTEM,MACHINE)
+    telemetery_update_task = asyncio.create_task(telemetery_update(device_client,OS_SYSTEM,MACHINE))
+    
     loop = asyncio.get_running_loop()
     end = loop.run_in_executor(None, end_listener)
     await end
