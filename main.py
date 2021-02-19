@@ -168,7 +168,7 @@ async def property_update(device_client,os_type,machine):
             highTemp=highTemp,
             criticalTemp=criticalTemp,
         )
-
+    global property_updates
     property_updates = asyncio.gather(
         device_client.patch_twin_reported_properties(properties_device_info),
     )
@@ -197,11 +197,7 @@ async def telemetery_update(device_client,os_type,machine):
         json_msg["logicalDISKfree"]=logicalDISKfree
         json_msg["logicalDISKusage"]=logicalDISKpercent
         if os_type == "Linux":
-            if 'x86' in machine:
-                json_msg["currentTemp"]=currentTemp
-            else:
-                json_msg["currentTemp"]=currentTemp
-                json_msg["currentTempGPU"]=currentTempGPU
+            json_msg["currentTemp"]=currentTemp
 
         print('[DEBUG] Sending Telemetry :{m}'.format(m=json_msg))
         # For Multiple components
@@ -209,6 +205,11 @@ async def telemetery_update(device_client,os_type,machine):
             await send_telemetry_with_component_name(device_client, json_msg, windows_device_info_component_name)
         elif os_type == "Linux":
             await send_telemetry_with_component_name(device_client, json_msg, linux_device_info_component_name)
+            if not 'x86' in machine:
+                json_msg_gpu = {}
+                msg = json_msg_gpu["currentTempGPU"]=currentTempGPU
+                print('[DEBUG] Sending Telemetry :{m}'.format(m=msg))
+                await send_telemetry_with_component_name(device_client,msg)
         await asyncio.sleep(period)
 
 async def reboot_handler(values):
@@ -231,38 +232,6 @@ async def setperiod_handler(values):
 def create_setperiod_response(values):
     response = {"result": True, "data": "Reset telemetry sending period succeeded"}
     return response
-
-async def execute_command_listener(device_client, method_name, user_command_handler, create_user_response_handler):
-    while True:
-        if method_name:
-            command_name = method_name
-        else:
-            command_name = None
-
-        command_request = await device_client.receive_method_request(command_name)
-        print("Command request received with payload ({method_name})".format(method_name=method_name))
-        print(command_request.payload)
-
-        values = {}
-        if not command_request.payload:
-            print("Payload was empty.")
-        else:
-            values = command_request.payload
-
-        await user_command_handler(values)
-
-        response_status = 200
-        response_payload = create_user_response_handler(values)
-
-        command_response = MethodResponse.create_from_method_request(
-            command_request, response_status, response_payload
-        )
-
-        try:
-            await device_client.send_method_response(command_response)
-        except Exception:
-            print("responding to the {command} command failed".format(command=method_name))
-
 
 async def provision_device(provisioning_host, id_scope, registration_id, symmetric_key, model_id):
     provisioning_device_client = ProvisioningDeviceClient.create_from_symmetric_key(
