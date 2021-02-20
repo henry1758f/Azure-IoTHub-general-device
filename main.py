@@ -18,7 +18,7 @@ from azure.iot.device.aio import ProvisioningDeviceClient
 from azure.iot.device import constant, Message, MethodResponse
 
 ## for DPS Testing
-model_id = ""
+model_id = "dtmi:ASUS:TinkerBoard;1"
 # For Multiple components
 import pnp_helper
 windows_device_info_component_name = "WindowsDeviceInfo1"
@@ -26,6 +26,27 @@ linux_device_info_component_name = "LinuxDeviceInfo1"
 #================#
 global period
 period = 2
+
+PIR_sensor_gpio_list = ['6','7','22']
+
+class PIRsensor(object):
+    def __init__(self,gpio,id,enable):
+        self.gpio=gpio
+        self.enable = enable
+        self.stat = 0
+        self.id = id
+    def get_stat(self):
+        self.stat = os.popen('gpio read '+ self.gpio).read().rstrip("\n")
+        return self.stat
+    def set_enable(self,value):
+        self.enable = value
+    def create_report(self):
+        response_dict = {}
+        if '1' in self.stat:
+            response_dict["pirDetect"] = True
+        else:
+            response_dict["pirDetect"] = False
+        return response_dict
 
 def end_listener():
     if os.getenv("KEYPAD_INTERRUPT") == "ENABLE":
@@ -173,7 +194,7 @@ async def property_update(device_client,os_type,machine):
         device_client.patch_twin_reported_properties(properties_device_info),
     )
 
-async def telemetery_update(device_client,os_type,machine):
+async def telemetery_update(device_client,os_type,machine,PIR_sensors):
     print('[DEBUG] Start sending telemetry every {sec} Second(s).'.format(sec=period))
     while True:
         cpuLoading = psutil.cpu_percent()
@@ -207,9 +228,15 @@ async def telemetery_update(device_client,os_type,machine):
             await send_telemetry_with_component_name(device_client, json_msg, linux_device_info_component_name)
             if not 'x86' in machine:
                 json_msg_gpu = {}
-                msg = json_msg_gpu["currentTempGPU"]=currentTempGPU
-                print('[DEBUG] Sending Telemetry :{m}'.format(m=msg))
-                await send_telemetry_with_component_name(device_client,msg)
+                json_msg_gpu["currentTempGPU"]=currentTempGPU
+                print('[DEBUG] Sending Telemetry :{m}'.format(m=json_msg_gpu))
+                await send_telemetry_with_component_name(device_client,json_msg_gpu)
+
+        for PIRsensor in PIR_sensors:
+            result = PIRsensor.get_stat()
+            msg = PIRsensor.create_report()
+            print( "PIR Sensor [{id}] on GPIO [{io}]: {report}".format( id=PIRsensor.id,io=PIRsensor.gpio,report=msg ) )
+            await send_telemetry_with_component_name(device_client, msg, 'PIRsensor{id}'.format(id=PIRsensor.id))
         await asyncio.sleep(period)
 
 async def reboot_handler(values):
@@ -390,9 +417,17 @@ async def main():
                 create_user_response_handler=create_setperiod_response,
             ),
         )
-
+    # Load PIR Senosr
+    PIR_sensors = []
+    PIR_counter = 0
+    for PIR_gpio in PIR_sensor_gpio_list:
+        PIR_sensors.append( PIRsensor(PIR_gpio,PIR_counter,True) )
+        print("[DEBUG] Create PIR Sensor {id} on GPIO {gpio}".format(id=PIR_counter,gpio=PIR_gpio) )
+        PIR_counter += 1
+        
+    
     await property_update(device_client,OS_SYSTEM,MACHINE)
-    telemetery_update_task = asyncio.create_task(telemetery_update(device_client,OS_SYSTEM,MACHINE))
+    telemetery_update_task = asyncio.create_task(telemetery_update(device_client,OS_SYSTEM,MACHINE,PIR_sensors))
     
     loop = asyncio.get_running_loop()
     end = loop.run_in_executor(None, end_listener)
