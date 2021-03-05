@@ -24,6 +24,7 @@ import pnp_helper
 windows_device_info_component_name = "WindowsDeviceInfo1"
 linux_device_info_component_name = "LinuxDeviceInfo1"
 #================#
+## Review test
 global period
 period = 2
 
