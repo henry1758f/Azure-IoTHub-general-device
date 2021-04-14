@@ -7,6 +7,7 @@ Please fill the form to let us known, we will contact you as soon as possible.
 ## About Azure PnP in this project
 IoT Plug and Play enables solution builders to integrate smart devices with their solutions without any manual configuration. At the core of IoT Plug and Play, is a device model that a device uses to advertise its capabilities to an IoT Plug and Play-enabled application. This project uses [linuxdeviceinfo-1] or [windowsdeviceinfo-1] as device model. 
 Support following elements:
+
 | | Element Type | Data Type | Linux Support | Windows Support |
 | ------ | ------ | ------ | ------ | ------ |
 | hostname | Property | String | YES | YES |
