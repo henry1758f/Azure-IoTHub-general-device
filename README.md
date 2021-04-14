@@ -40,8 +40,8 @@ Support following elements:
 
 ## Getting Start
 #### 1. Create and set the Azure Device Provision Service (DPS).
-#### 1. Clone this repo.
-#### 2. Modify the Parameter
+#### 2. Clone this repo.
+#### 3. Modify the Parameter
 Open "[run.sh]" modify by following hint
 ```sh
 export IOTHUB_DEVICE_SECURITY_TYPE="DPS" 
