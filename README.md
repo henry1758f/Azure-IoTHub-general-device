@@ -1,8 +1,8 @@
 # General Device Monitor
-This is an python code that make you get system information and get current CPU/Memory/Storage usage, and sent these data via [Azure IoT] Hub using [Azure Device Provisioning Service].
-You can monitoring your devices status remotly by Azure IoT Services.
+This is a python code that makes you get system information and get current CPU/Memory/Storage usage and sent these data via Azure IoT Hub using Azure Device Provisioning Service. 
+You can monitor your device's status remotely by Azure IoT Services.
 #### To pass the Azure PnP Certification
-Please fill the form to let us known, we will contact you as soon as possible.
+Please fill the form to let us know, we will contact you as soon as possible.
 [LINK to the Form][form_link]
 ## About Azure PnP in this project
 IoT Plug and Play enables solution builders to integrate smart devices with their solutions without any manual configuration. At the core of IoT Plug and Play, is a device model that a device uses to advertise its capabilities to an IoT Plug and Play-enabled application. This project uses [linuxdeviceinfo-1] or [windowsdeviceinfo-1] as device model. 
