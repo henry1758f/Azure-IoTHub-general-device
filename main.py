@@ -70,8 +70,9 @@ async def property_update(device_client,os_type,machine):
     elif os_type == "Linux":
         root_path = '/'
         hostname_str = platform.node()
-        osVersion = ' '.join(os.popen('hostnamectl |grep "Operating System"').read().split(':')[1].split() )
-        osBuildNumber = ' '.join(os.popen('hostnamectl |grep "Kernel"').read().split(':')[1].split() )
+        osVersion = (' '.join(os.popen('cat /etc/os-release |grep "PRETTY_NAME"').read().split('=')[1].split())).split('"')[1]
+        osBuildNumber = ' '.join(os.popen('uname -v')).split('\n')[0]
+        kernelVersion = ' '.join(os.popen('uname -r')).split('\n')[0]
         if "x86" in machine:
             cpuInfo = ' '.join(os.popen('lscpu |grep "Model name"').read().split(':')[1].split() )
             biosManufacturer = ' '.join(os.popen('cat /sys/class/dmi/id/bios_vendor').read().split() )
@@ -109,12 +110,13 @@ async def property_update(device_client,os_type,machine):
     print('Property List Upodate >>>>>>')
     print("OS type : {os}".format(os=os_type))
     print("OS Version : {osV}".format(osV=osVersion))
-    print("OS Build/Kernel : {osK}".format(osK=osBuildNumber))
+    print("OS Build : {osK}".format(osK=osBuildNumber))
     print("Hostname : {host}".format(host=hostname_str))
     print("CPU Info : {cpu}".format(cpu=cpuInfo))
     print("CPU Core Count : {cpus}".format(cpus=cpuCores))
     print("CPU Max Frequency : {cpuMF}".format(cpuMF=cpuMaxfreq))
     if os_type == "Linux":
+        print("OS Kernel : {osK}".format(osK=kernelVersion))
         print("> CPU High Temp : {cpu_ht} Ce".format(cpu_ht=highTemp))
         print("> CPU Critical : {cpu_ct} Ce".format(cpu_ct=criticalTemp))
     print("BIOS Manufature : {biosM}".format(biosM=biosManufacturer))
@@ -161,6 +163,7 @@ async def property_update(device_client,os_type,machine):
             baseboardProduct=baseboardProduct,
             osVersion=osVersion,
             osBuildNumber=osBuildNumber,
+            osKernelVersion=kernelVersion,
             memTotal=memTotal,
             logicalDISKtotal=logicalDISKtotal,
             ipLocal=ipLocal,
