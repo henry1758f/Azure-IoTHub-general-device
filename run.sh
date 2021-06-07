@@ -23,5 +23,5 @@ echo $IOTHUB_DEVICE_DPS_DEVICE_KEY
 echo $IOTHUB_DEVICE_CONNECTION_STRING
 echo $KEYPAD_INTERRUPT
 
-pip3 install -r requirememts.txt || pip install -r requirememts.txt
-python main.py || python3 main.py
+pip3 install -r requirements.txt || pip install -r requirememts.txt
+python3 main.py || python main.py 

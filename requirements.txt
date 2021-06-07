@@ -1,3 +1,4 @@
 psutil
+rfc3339
 azure-iot-hub
 azure-iot-device

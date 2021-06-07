@@ -9,6 +9,7 @@ import platform
 import json
 import os
 import sys
+import csv
 
 #for IP Address obtain
 import socket
@@ -18,14 +19,28 @@ from azure.iot.device.aio import ProvisioningDeviceClient
 from azure.iot.device import constant, Message, MethodResponse
 
 ## for DPS Testing
-model_id = ""
+model_id = "dtmi:ASUS:TinkerEdgeR;1"
 # For Multiple components
 import pnp_helper
 windows_device_info_component_name = "WindowsDeviceInfo1"
 linux_device_info_component_name = "LinuxDeviceInfo1"
+lpr_device_info_component_name = "LprDetectCam1"
 #================#
 global period
-period = 2
+period = 5
+
+global lpr_period
+lpr_period = 2
+info_dump = True
+debug_dump = False
+
+def info_dumper(msg):   # information for user
+    if info_dump:
+        print('[INFO] ' + msg)
+
+def debug_dumper(msg):  # information for debug
+    if debug_dump:
+        print('[DEBUG] ' + msg)
 
 def end_listener():
     if os.getenv("KEYPAD_INTERRUPT") == "ENABLE":
@@ -207,10 +222,99 @@ async def telemetery_update(device_client,os_type,machine):
             await send_telemetry_with_component_name(device_client, json_msg, linux_device_info_component_name)
             if not 'x86' in machine:
                 json_msg_gpu = {}
-                msg = json_msg_gpu["currentTempGPU"]=currentTempGPU
-                print('[DEBUG] Sending Telemetry :{m}'.format(m=msg))
-                await send_telemetry_with_component_name(device_client,msg)
+                json_msg_gpu["currentTempGPU"]=currentTempGPU
+                print('[DEBUG] Sending Telemetry :{m}'.format(m=json_msg_gpu))
+                await send_telemetry_with_component_name(device_client,json_msg_gpu)
         await asyncio.sleep(period)
+
+async def lpr_update(device_client):
+    info_dumper('Start Checking License Plate every {sec} Second(s).'.format(sec=lpr_period))
+    import rfc3339
+    from datetime import datetime
+    detectDaytime=rfc3339.rfc3339( datetime.strptime("2021-05-21 15:50:50","%Y-%m-%d %H:%M:%S") )
+    lpString="ABC-1234"
+    score=0.05
+    lpLocation=[0.05,0.05,0.05,0.05]
+    lpSize=0.025
+    old_lpr_data = None
+    old_event_data = None
+    debug_dumper("Start finding container ID...")
+    container_id = "NO ID"
+    container_id = os.popen('docker ps |grep alpr-native').read().split()[0]
+    info_dumper("Get container ID! {id}".format(id=container_id))
+    while True:
+        lpr_detail='detail-' + datetime.strftime( datetime.now(), '%Y-%m-%d' ) + '.csv'
+        lpr_event='event-' + datetime.strftime( datetime.now(), '%Y-%m-%d' ) + '.csv'
+        #debug_dumper('Reading {filename} from Container {id} ...'.format(filename=lpr_detail,id=container_id) )
+        command_readlpr = 'docker exec ' + container_id + ' cat /google/azuretest/csv/' + lpr_detail + ' > ' + lpr_detail
+        #debug_dumper('Excute: ' + command_readlpr )
+        os.popen(command_readlpr)
+        #debug_dumper('Reading {filename} from Container {id} ...'.format(filename=lpr_event,id=container_id) )
+        command_readevent = 'docker exec ' + container_id + ' cat /google/azuretest/csv/' + lpr_event + ' > ' + lpr_event
+        #debug_dumper('Excute: ' + command_readevent )
+        os.popen(command_readevent)
+        latest_lpr_data = None
+        latest_event_data = None
+        await asyncio.sleep(0.5)    #Waiting for cat writing
+        try:
+            with open(lpr_detail, newline='') as csvfile:
+                rows = csv.reader(csvfile)
+                for row in rows:
+                    latest_lpr_data = row
+                debug_dumper('Done! Last Data of {file} is : {data}'.format(file=lpr_detail,data=latest_lpr_data) )
+        except:
+            debug_dumper('Reading {file} ERROR!!'.format(file=lpr_detail))
+        try:   
+            with open(lpr_event, newline='') as csvfile:
+                rows = csv.reader(csvfile)
+                for row in rows:
+                    latest_event_data = row
+                debug_dumper('Last Data of {file} is : {data}'.format(file=lpr_event,data=latest_event_data) )
+        except:
+            debug_dumper('Reading {file} ERROR!!'.format(file=lpr_event))
+        
+        if old_lpr_data != latest_lpr_data and latest_lpr_data != None:
+            json_msg = {}
+            debug_dumper('Updating License Plate Data : {m}'.format(m=latest_lpr_data))
+            try:
+                detectDaytime= rfc3339.rfc3339( datetime.strptime(latest_lpr_data[0],"%Y-%m-%d %H:%M:%S") )
+                lpString = latest_lpr_data[1]
+                score = latest_lpr_data[2]
+                lpLocation = [ latest_lpr_data[3],latest_lpr_data[4],latest_lpr_data[5],latest_lpr_data[6] ]
+                lpSize = latest_lpr_data[7]
+                json_msg["detectDaytime"]=detectDaytime
+                json_msg["lpString"]=lpString
+                json_msg["score"]=score
+                json_msg["lpLocation"]=lpLocation
+                json_msg["lpSize"]=lpSize
+            except:
+                debug_dumper('This License Plate Data is not complete!!')
+            else:
+                info_dumper('Sending License Plate Telemetry : {m}'.format(m=json_msg))
+                await send_telemetry_with_component_name(device_client, json_msg, lpr_device_info_component_name)
+                old_lpr_data = latest_lpr_data
+        else:
+            info_dumper('No License Plate Data Update !!')
+
+        if old_event_data != latest_event_data and latest_event_data != None:
+            json_msg = {}
+            debug_dumper('Updating Event Data : {m}'.format(m=latest_event_data))
+            try:
+                eventName = latest_event_data[0]
+                eventTime = rfc3339.rfc3339( datetime.strptime(latest_event_data[1],"%Y-%m-%d %H:%M:%S") )
+                json_msg["eventName"]=eventName
+                json_msg["eventTime"]=eventTime
+            except:
+                debug_dumper('This Event Data is not complete!!')
+            else:
+                info_dumper('Sending Event Telemetry : {m}'.format(m=json_msg))
+                await send_telemetry_with_component_name(device_client, json_msg, lpr_device_info_component_name)
+                old_event_data = latest_event_data
+        else:
+            info_dumper('No Event Data Update !!')
+
+        
+        await asyncio.sleep(lpr_period)
 
 async def reboot_handler(values):
     if values and type(values) == int:
@@ -231,6 +335,17 @@ async def setperiod_handler(values):
 
 def create_setperiod_response(values):
     response = {"result": True, "data": "Reset telemetry sending period succeeded"}
+    return response
+
+async def setlprperiod_handler(values):
+    global lpr_period
+    if values and type(values) == int:
+        print("Reset telemetry sending lprperiod from {delay_old} to {delay} secs".format(delay_old=lpr_period,delay=values))
+        lpr_period = values
+    print("Finished lprperiod setting!")
+
+def create_setlprperiod_response(values):
+    response = {"result": True, "data": "Reset telemetry sending lprperiod succeeded"}
     return response
 
 async def provision_device(provisioning_host, id_scope, registration_id, symmetric_key, model_id):
@@ -372,6 +487,13 @@ async def main():
                 user_command_handler=setperiod_handler,
                 create_user_response_handler=create_setperiod_response,
             ),
+            execute_command_listener(
+                device_client,
+                lpr_device_info_component_name,
+                method_name="setlprperiod",
+                user_command_handler=setlprperiod_handler,
+                create_user_response_handler=create_setlprperiod_response,
+            ),
         )
     elif OS_SYSTEM == "Linux":
         listeners = asyncio.gather(
@@ -389,11 +511,19 @@ async def main():
                 user_command_handler=setperiod_handler,
                 create_user_response_handler=create_setperiod_response,
             ),
+            execute_command_listener(
+                device_client,
+                lpr_device_info_component_name,
+                method_name="setlprperiod",
+                user_command_handler=setlprperiod_handler,
+                create_user_response_handler=create_setlprperiod_response,
+            ),
         )
 
     await property_update(device_client,OS_SYSTEM,MACHINE)
     telemetery_update_task = asyncio.create_task(telemetery_update(device_client,OS_SYSTEM,MACHINE))
-    
+    lpr_update_task = asyncio.create_task(lpr_update(device_client))
+
     loop = asyncio.get_running_loop()
     end = loop.run_in_executor(None, end_listener)
     await end
@@ -410,6 +540,7 @@ async def main():
     property_updates.cancel()
 
     telemetery_update_task.cancel()
+    lpr_update_task.cancel()
 
     # finally, disconnect
     await device_client.disconnect()
