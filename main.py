@@ -18,21 +18,24 @@ from azure.iot.device.aio import IoTHubDeviceClient
 from azure.iot.device.aio import ProvisioningDeviceClient
 from azure.iot.device import constant, Message, MethodResponse
 
-## for DPS Testing
-model_id = "dtmi:ASUS:TinkerEdgeR;1"
-# For Multiple components
+# For Azure PnP Device Model
+model_id = "dtmi:ASUS:TinkerEdgeR;2"
+
 import pnp_helper
 windows_device_info_component_name = "WindowsDeviceInfo1"
 linux_device_info_component_name = "LinuxDeviceInfo1"
 lpr_device_info_component_name = "LprDetectCam1"
-#================#
+
+# Default Message Period of System Info and LPR result to Azure IoT Hub
 global period
 period = 5
-
 global lpr_period
 lpr_period = 2
+
+# Debug Message Enable
 info_dump = True
 debug_dump = False
+error_dump = True
 
 def info_dumper(msg):   # information for user
     if info_dump:
@@ -41,6 +44,9 @@ def info_dumper(msg):   # information for user
 def debug_dumper(msg):  # information for debug
     if debug_dump:
         print('[DEBUG] ' + msg)
+def error_dumper(msg):  # information for error
+    if debug_dump:
+        print('[ERROR] ' + msg)
 
 def end_listener():
     if os.getenv("KEYPAD_INTERRUPT") == "ENABLE":
@@ -50,7 +56,7 @@ def end_listener():
                 print("Quitting...")
                 break
     else :
-        print('[DEBUG] Telemetry will send forever.')
+        info_dumper('Telemetry will send forever.')
         import time
         while True:
             time.sleep(1)
@@ -58,7 +64,7 @@ def end_listener():
 
 
 async def property_update(device_client,os_type,machine):
-    print("[DEBUG] Update System Message")
+    info_dumper("Update System Message")
     # get IP Address
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.connect(("8.8.8.8", 80))
@@ -141,6 +147,7 @@ async def property_update(device_client,os_type,machine):
     print("Memory size : {memSZ}".format(memSZ=memTotal))
     print("Local IP Address : {ip}".format(ip=ipLocal))
     print("Public IP Address : {ip}".format(ip=ipPublic))
+    print('============================')
 
     # For Multiple components
     if os_type == "Windows":
@@ -189,7 +196,7 @@ async def property_update(device_client,os_type,machine):
     )
 
 async def telemetery_update(device_client,os_type,machine):
-    print('[DEBUG] Start sending telemetry every {sec} Second(s).'.format(sec=period))
+    info_dumper('Start sending telemetry every {sec} Second(s).'.format(sec=period))
     while True:
         cpuLoading = psutil.cpu_percent()
         cpuClock =  psutil.cpu_freq().current
@@ -214,7 +221,7 @@ async def telemetery_update(device_client,os_type,machine):
         if os_type == "Linux":
             json_msg["currentTemp"]=currentTemp
 
-        print('[DEBUG] Sending Telemetry :{m}'.format(m=json_msg))
+        info_dumper('Sending Telemetry :{m}'.format(m=json_msg))
         # For Multiple components
         if os_type == "Windows":
             await send_telemetry_with_component_name(device_client, json_msg, windows_device_info_component_name)
@@ -223,7 +230,7 @@ async def telemetery_update(device_client,os_type,machine):
             if not 'x86' in machine:
                 json_msg_gpu = {}
                 json_msg_gpu["currentTempGPU"]=currentTempGPU
-                print('[DEBUG] Sending Telemetry :{m}'.format(m=json_msg_gpu))
+                info_dumper('Sending Telemetry :{m}'.format(m=json_msg_gpu))
                 await send_telemetry_with_component_name(device_client,json_msg_gpu)
         await asyncio.sleep(period)
 
@@ -279,9 +286,10 @@ async def lpr_update(device_client):
             try:
                 detectDaytime= rfc3339.rfc3339( datetime.strptime(latest_lpr_data[0],"%Y-%m-%d %H:%M:%S") )
                 lpString = latest_lpr_data[1]
-                score = latest_lpr_data[2]
-                lpLocation = [ latest_lpr_data[3],latest_lpr_data[4],latest_lpr_data[5],latest_lpr_data[6] ]
-                lpSize = latest_lpr_data[7]
+                score = float(latest_lpr_data[2])
+                lpLocation = [ float(latest_lpr_data[3]), float(latest_lpr_data[4]), float(latest_lpr_data[5]), float(latest_lpr_data[6]) ]
+                lpSize = float(latest_lpr_data[7])
+
                 json_msg["detectDaytime"]=detectDaytime
                 json_msg["lpString"]=lpString
                 json_msg["score"]=score
@@ -318,9 +326,9 @@ async def lpr_update(device_client):
 
 async def reboot_handler(values):
     if values and type(values) == int:
-        print("Rebooting after delay of {delay} secs".format(delay=values))
+        info_dumper("Rebooting after delay of {delay} secs".format(delay=values))
         asyncio.sleep(values)
-    print("Done rebooting")
+    info_dumper("Done rebooting")
 
 def create_reboot_response(values):
     response = {"result": True, "data": "reboot succeeded"}
@@ -329,9 +337,9 @@ def create_reboot_response(values):
 async def setperiod_handler(values):
     global period
     if values and type(values) == int:
-        print("Reset telemetry sending period from {delay_old} to {delay} secs".format(delay_old=period,delay=values))
+        info_dumper("Reset telemetry sending period from {delay_old} to {delay} secs".format(delay_old=period,delay=values))
         period = values
-    print("Finished period setting!")
+    info_dumper("Finished period setting!")
 
 def create_setperiod_response(values):
     response = {"result": True, "data": "Reset telemetry sending period succeeded"}
@@ -340,9 +348,9 @@ def create_setperiod_response(values):
 async def setlprperiod_handler(values):
     global lpr_period
     if values and type(values) == int:
-        print("Reset telemetry sending lprperiod from {delay_old} to {delay} secs".format(delay_old=lpr_period,delay=values))
+        info_dumper("Reset telemetry sending lprperiod from {delay_old} to {delay} secs".format(delay_old=lpr_period,delay=values))
         lpr_period = values
-    print("Finished lprperiod setting!")
+    info_dumper("Finished lprperiod setting!")
 
 def create_setlprperiod_response(values):
     response = {"result": True, "data": "Reset telemetry sending lprperiod succeeded"}
@@ -362,7 +370,7 @@ async def provision_device(provisioning_host, id_scope, registration_id, symmetr
 async def send_telemetry_with_component_name(device_client, telemetry_msg, component_name=None):
     msg = pnp_helper.create_telemetry(telemetry_msg, component_name)
     await device_client.send_message(msg)
-    print("Sent message")
+    debug_dumper("Sent message")
 
 async def execute_command_listener(
     device_client,
@@ -394,14 +402,14 @@ async def execute_command_listener(
             command_name = None
 
         command_request = await device_client.receive_method_request(command_name)
-        print("Command request received with payload")
+        info_dumper("Command request received with payload")
         values = command_request.payload
-        print(values)
+        debug_dumper(values)
 
         if user_command_handler:
             await user_command_handler(values)
         else:
-            print("No handler provided to execute")
+            error_dumper("No handler provided to execute")
 
         (response_status, response_payload) = pnp_helper.create_response_payload_with_status(
             command_request, method_name, create_user_response=create_user_response_handler
@@ -414,7 +422,7 @@ async def execute_command_listener(
         try:
             await device_client.send_method_response(command_response)
         except Exception:
-            print("responding to the {command} command failed".format(command=method_name))
+            error_dumper("responding to the {command} command failed".format(command=method_name))
 
 async def main():
     print("SYNNEX Technology International Corp. Azure-IoT General Device")
@@ -430,16 +438,16 @@ async def main():
         registration_id = os.getenv("IOTHUB_DEVICE_DPS_DEVICE_ID")
         symmetric_key = os.getenv("IOTHUB_DEVICE_DPS_DEVICE_KEY")
 
-        print('[DEBUG] id_scope={id},\n > registration_id={rid}\n > symmetric_key={skey}'.format(id=id_scope,rid=registration_id,skey=symmetric_key))
+        debug_dumper('id_scope={id},\n > registration_id={rid}\n > symmetric_key={skey}'.format(id=id_scope,rid=registration_id,skey=symmetric_key))
 
         registration_result = await provision_device(
             provisioning_host, id_scope, registration_id, symmetric_key, model_id
         )
 
         if registration_result.status == "assigned":
-            print("Device was assigned")
-            print(registration_result.registration_state.assigned_hub)
-            print(registration_result.registration_state.device_id)
+            info_dumper("Device was assigned")
+            info_dumper(registration_result.registration_state.assigned_hub)
+            info_dumper(registration_result.registration_state.device_id)
 
             device_client = IoTHubDeviceClient.create_from_symmetric_key(
                 symmetric_key=symmetric_key,
@@ -454,7 +462,7 @@ async def main():
 
     elif switch == "connectionString":
         conn_str = os.getenv("IOTHUB_DEVICE_CONNECTION_STRING")
-        print("Connecting using Connection String " + conn_str)
+        info_dumper("Connecting using Connection String " + conn_str)
         device_client = IoTHubDeviceClient.create_from_connection_string(
             conn_str, product_info=model_id
         )
@@ -548,4 +556,9 @@ async def main():
 
 #================================#
 if __name__ == "__main__":
-    asyncio.run(main())
+    import sys
+    if sys.version_info[0] >= 3 and sys.version_info[1] >= 7:
+        asyncio.run(main())
+    else:
+        raise Exception("Must be using Python 3.7 or Newer! Yor are using python {ver0}.{ver1}.{ver2}".format(ver0=sys.version_info[0], ver1=sys.version_info[1], ver2=sys.version_info[2]))
+
