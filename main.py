@@ -187,7 +187,7 @@ async def telemetery_update(device_client,os_type,machine):
                 currentTemp = psutil.sensors_temperatures()['coretemp'][0][1]
             else:
                 currentTemp = psutil.sensors_temperatures()['soc-thermal'][0][1]
-                currentTempGPU = psutil.sensors_temperatures()['gpu-thermal'][0][1]
+                #currentTempGPU = psutil.sensors_temperatures()['gpu-thermal'][0][1]
         
         json_msg = {}
         json_msg["cpuLoading"]=cpuLoading
@@ -205,11 +205,11 @@ async def telemetery_update(device_client,os_type,machine):
             await send_telemetry_with_component_name(device_client, json_msg, windows_device_info_component_name)
         elif os_type == "Linux":
             await send_telemetry_with_component_name(device_client, json_msg, linux_device_info_component_name)
-            if not 'x86' in machine:
-                json_msg_gpu = {}
-                msg = json_msg_gpu["currentTempGPU"]=currentTempGPU
-                print('[DEBUG] Sending Telemetry :{m}'.format(m=msg))
-                await send_telemetry_with_component_name(device_client,msg)
+            #if not 'x86' in machine:
+            #    json_msg_gpu = {}
+            #    msg = json_msg_gpu["currentTempGPU"]=currentTempGPU
+            #    print('[DEBUG] Sending Telemetry :{m}'.format(m=msg))
+            #    await send_telemetry_with_component_name(device_client,msg)
         await asyncio.sleep(period)
 
 async def reboot_handler(values):

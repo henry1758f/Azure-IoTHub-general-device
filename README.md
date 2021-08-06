@@ -27,7 +27,7 @@ Support following elements:
 | ipLocal | Property | String | YES | YES | 
 | ipPublic | Property | String | YES | YES |
 | highTemp | Property | double | YES | |
-| currentTempGPU | Telemetry | double | YES (ARM SoC) | |
+| currentTempGPU | Telemetry | double | | |
 | cpuLoading | Telemetry | double | YES | YES | 
 | cpuClock | Telemetry | double | YES | YES | 
 | memFree | Telemetry | long | YES | YES | 
