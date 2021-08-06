@@ -1,1 +1,8 @@
-theme: jekyll-theme-cayman
+remote_theme: henry1758f/cayman
+plugins:
+- jekyll-remote-theme
+show_downloads: true
+google_analytics: G-GRXVNV47Q9
+github:
+  zip_url: https://github.com/henry1758f/Azure-IoTHub-general-device/archive/refs/tags/v1.0.1.zip
+  tar_url: https://github.com/henry1758f/Azure-IoTHub-general-device/archive/refs/tags/v1.0.1.tar.gz
