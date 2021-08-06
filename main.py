@@ -93,8 +93,8 @@ async def property_update(device_client,os_type,machine):
             except:
                 cpuInfo = machine
             try:
-                highTemp = psutil.sensors_temperatures()['soc-thermal'][0][2]
-                criticalTemp = psutil.sensors_temperatures()['soc-thermal'][0][3]
+                highTemp = psutil.sensors_temperatures()['imx_thermal_zone'][0][2]
+                criticalTemp = psutil.sensors_temperatures()['imx_thermal_zone'][0][3]
             except:
                 highTemp = 0
                 criticalTemp = 0    
@@ -186,7 +186,7 @@ async def telemetery_update(device_client,os_type,machine):
             if 'x86' in machine:
                 currentTemp = psutil.sensors_temperatures()['coretemp'][0][1]
             else:
-                currentTemp = psutil.sensors_temperatures()['soc-thermal'][0][1]
+                currentTemp = psutil.sensors_temperatures()['imx_thermal_zone'][0][1]
                 #currentTempGPU = psutil.sensors_temperatures()['gpu-thermal'][0][1]
         
         json_msg = {}
